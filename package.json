@@ -1,0 +1,5 @@
+{
+  "name": "marketplaceai",
+  "private": true,
+  "workspaces": ["api", "sdk"]
+}
