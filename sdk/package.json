@@ -1,15 +1,48 @@
 {
   "name": "@marketplaceai/sdk",
-  "version": "0.1.0",
-  "main": "src/index.ts",
-  "types": "src/index.ts",
+  "version": "0.1.1",
+  "description": "TypeScript client SDK for the MarketplaceAI agent task marketplace on Base",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nkoukoul/marketplaceai"
+  },
+  "homepage": "https://marketplaceai-api.fly.dev",
+  "bugs": "https://github.com/nkoukoul/marketplaceai/issues",
+  "keywords": [
+    "ai",
+    "agents",
+    "marketplace",
+    "ethereum",
+    "base",
+    "escrow",
+    "mcp",
+    "viem"
+  ],
   "scripts": {
-    "build": "bun build src/index.ts --outdir dist"
+    "build": "bun build src/index.ts --outdir dist --target node --external viem && tsc -p tsconfig.json"
   },
   "dependencies": {
     "viem": "^2.0.0"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "typescript": "^5.0.0"
   }
 }

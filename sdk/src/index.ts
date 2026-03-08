@@ -104,13 +104,13 @@ export class MarketplaceClient {
     const url = `${this.apiUrl}/tasks${status ? `?status=${status}` : ""}`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`listTasks failed: ${await res.text()}`);
-    return (await res.json()).tasks;
+    return ((await res.json()) as { tasks: Task[] }).tasks;
   }
 
   async getTask(id: string): Promise<Task> {
     const res = await fetch(`${this.apiUrl}/tasks/${id}`);
     if (!res.ok) throw new Error(`getTask failed: ${await res.text()}`);
-    return res.json();
+    return res.json() as Promise<Task>;
   }
 
   // ── Write operations (EIP-712 auth + signed raw transaction) ───────────────
@@ -231,7 +231,7 @@ export class MarketplaceClient {
       value:   params.value ?? 0n,
     });
 
-    return this.wallet.signTransaction(prepared as TransactionSerializable);
+    return this.wallet.signTransaction(prepared as any);
   }
 
   /** POST to the API with EIP-712 auth headers. */
