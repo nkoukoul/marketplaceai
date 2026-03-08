@@ -88,7 +88,6 @@ function Shell({ title, refresh, children }: {
         <nav class="border-b border-gray-800 px-6 py-4 sticky top-0 bg-gray-950/90 backdrop-blur z-10">
           <div class="max-w-6xl mx-auto flex items-center justify-between">
             <a href="/" class="mono font-bold text-lg tracking-tight">MarketplaceAI</a>
-            <a href="/admin" class="text-sm text-gray-400 hover:text-white transition-colors">Admin →</a>
           </div>
         </nav>
         {children}
