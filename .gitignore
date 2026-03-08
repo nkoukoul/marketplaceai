@@ -1,10 +1,11 @@
 # dependencies (bun install)
 node_modules
 
-# Foundry build artifacts
+# Foundry build artifacts and dependencies (run `forge install` after cloning)
 contracts/out/
 contracts/cache/
 contracts/broadcast/
+contracts/lib/
 
 # output
 out
