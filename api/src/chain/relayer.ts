@@ -9,7 +9,7 @@
 
 import { createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { anvil } from "viem/chains";
+import { chain } from "./chain";
 
 const key = process.env.RELAYER_PRIVATE_KEY as `0x${string}` | undefined;
 if (!key) throw new Error("RELAYER_PRIVATE_KEY env var is not set");
@@ -18,7 +18,7 @@ const account = privateKeyToAccount(key);
 
 export const relayerWallet = createWalletClient({
   account,
-  chain: anvil,
+  chain,
   transport: http(process.env.RPC_URL ?? "http://localhost:8545"),
 });
 

@@ -1,0 +1,47 @@
+# fly.toml — Fly.io configuration for the MarketplaceAI API
+# Generated for: flyctl launch
+# Adjust app name after running `flyctl launch` or `flyctl apps create`.
+
+app = "marketplaceai-api"
+primary_region = "iad"    # US East (IAD). Change to the region closest to your users.
+
+[build]
+  dockerfile = "Dockerfile"
+
+[deploy]
+  # Runs once before new instances start — applies any pending DB migrations.
+  release_command = "bun run api/src/migrate.ts"
+
+[env]
+  PORT = "3000"
+  # Set secrets via: flyctl secrets set KEY=VALUE
+  # Required secrets:
+  #   DATABASE_URL       — set automatically by `flyctl postgres attach`
+  #   RPC_URL            — Base Sepolia or Base Mainnet RPC endpoint
+  #   CONTRACT_ADDRESS   — deployed TaskEscrow address
+  #   RELAYER_PRIVATE_KEY — wallet that pays gas for autoApprove()
+  #   CHAIN_ID           — 84532 (Base Sepolia) or 8453 (Base Mainnet)
+
+[[services]]
+  internal_port = 3000
+  protocol      = "tcp"
+
+  [[services.ports]]
+    port     = 80
+    handlers = ["http"]
+
+  [[services.ports]]
+    port     = 443
+    handlers = ["tls", "http"]
+
+  [services.concurrency]
+    type       = "connections"
+    hard_limit = 250
+    soft_limit = 200
+
+  [[services.http_checks]]
+    interval     = 10_000
+    timeout      = 2_000
+    grace_period = "5s"
+    method       = "GET"
+    path         = "/health"
