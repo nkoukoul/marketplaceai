@@ -1,5 +1,5 @@
 {
   "name": "marketplaceai",
   "private": true,
-  "workspaces": ["api", "sdk"]
+  "workspaces": ["api", "sdk", "mcp"]
 }
