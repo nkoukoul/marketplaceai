@@ -1,10 +1,10 @@
 // Typed wrappers around the TaskEscrow contract.
-// Each function either reads from chain (publicClient) or sends a transaction
-// (walletClient). All values are returned as plain JS types — viem bigints are
-// converted to strings so they survive JSON serialisation.
+// Read functions use the public client (no key needed).
+// Write functions accept a pre-signed raw transaction from the agent —
+// the API broadcasts it without ever seeing a private key.
 
-import { parseEther, keccak256, toBytes, formatEther } from "viem";
-import { publicClient, walletClientFromKey } from "./client";
+import { formatEther } from "viem";
+import { publicClient } from "./client";
 import { TASK_ESCROW_ABI } from "./abi";
 
 const contractAddress = (process.env.CONTRACT_ADDRESS ?? "") as `0x${string}`;
@@ -31,9 +31,10 @@ export async function readTask(onchainId: `0x${string}`) {
     amountEth: formatEther(task.amount),
     deadline: new Date(Number(task.deadline) * 1000).toISOString(),
     status: statusMap[task.status] ?? "unknown",
-    resultHash: task.resultHash === "0x0000000000000000000000000000000000000000000000000000000000000000"
-      ? null
-      : task.resultHash,
+    resultHash:
+      task.resultHash === "0x0000000000000000000000000000000000000000000000000000000000000000"
+        ? null
+        : task.resultHash,
   };
 }
 
@@ -56,71 +57,10 @@ export async function readPendingFees(): Promise<string> {
 
 // ─── Writes ───────────────────────────────────────────────────────────────────
 
-export async function sendCreateTask(params: {
-  onchainId: `0x${string}`;
-  deadlineTimestamp: bigint;
-  amountEth: string;
-  signerKey: `0x${string}`;
-}) {
-  const { client, account } = walletClientFromKey(params.signerKey);
-  const hash = await client.writeContract({
-    address: contractAddress,
-    abi: TASK_ESCROW_ABI,
-    functionName: "createTask",
-    args: [params.onchainId, params.deadlineTimestamp],
-    value: parseEther(params.amountEth),
-    account,
-  });
-  await publicClient.waitForTransactionReceipt({ hash });
-  return hash;
-}
-
-export async function sendClaimTask(params: {
-  onchainId: `0x${string}`;
-  signerKey: `0x${string}`;
-}) {
-  const { client, account } = walletClientFromKey(params.signerKey);
-  const hash = await client.writeContract({
-    address: contractAddress,
-    abi: TASK_ESCROW_ABI,
-    functionName: "claimTask",
-    args: [params.onchainId],
-    account,
-  });
-  await publicClient.waitForTransactionReceipt({ hash });
-  return hash;
-}
-
-export async function sendSubmitResult(params: {
-  onchainId: `0x${string}`;
-  resultText: string;
-  signerKey: `0x${string}`;
-}) {
-  const resultHash = keccak256(toBytes(params.resultText));
-  const { client, account } = walletClientFromKey(params.signerKey);
-  const hash = await client.writeContract({
-    address: contractAddress,
-    abi: TASK_ESCROW_ABI,
-    functionName: "submitResult",
-    args: [params.onchainId, resultHash],
-    account,
-  });
-  await publicClient.waitForTransactionReceipt({ hash });
-  return { txHash: hash, resultHash };
-}
-
-export async function sendApproveResult(params: {
-  onchainId: `0x${string}`;
-  signerKey: `0x${string}`;
-}) {
-  const { client, account } = walletClientFromKey(params.signerKey);
-  const hash = await client.writeContract({
-    address: contractAddress,
-    abi: TASK_ESCROW_ABI,
-    functionName: "approveResult",
-    args: [params.onchainId],
-    account,
-  });
+// Broadcast a raw signed transaction that was constructed and signed by the agent.
+// The API never holds a private key — it just submits what the agent sent.
+export async function broadcastSignedTx(serializedTransaction: `0x${string}`) {
+  const hash = await publicClient.sendRawTransaction({ serializedTransaction });
   await publicClient.waitForTransactionReceipt({ hash });
   return hash;
 }
