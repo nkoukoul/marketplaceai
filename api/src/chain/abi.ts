@@ -4,7 +4,10 @@
 export const TASK_ESCROW_ABI = [
   {
     type: "constructor",
-    inputs: [{ name: "_feeBps", type: "uint16" }],
+    inputs: [
+      { name: "_feeBps", type: "uint16" },
+      { name: "_autoApproveDelay", type: "uint256" },
+    ],
     stateMutability: "nonpayable",
   },
   {
@@ -84,6 +87,27 @@ export const TASK_ESCROW_ABI = [
   },
   {
     type: "function",
+    name: "autoApprove",
+    inputs: [{ name: "taskId", type: "bytes32" }],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "autoApproveAvailableAt",
+    inputs: [{ name: "taskId", type: "bytes32" }],
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "autoApproveDelay",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
     name: "withdrawFees",
     inputs: [{ name: "to", type: "address" }],
     outputs: [],
@@ -130,6 +154,7 @@ export const TASK_ESCROW_ABI = [
   { type: "error", name: "TaskNotFound", inputs: [] },
   { type: "error", name: "NotRequester", inputs: [] },
   { type: "error", name: "NotWorker", inputs: [] },
+  { type: "error", name: "AutoApproveNotReady", inputs: [] },
   { type: "error", name: "DeadlinePassed", inputs: [] },
   { type: "error", name: "DeadlineNotPassed", inputs: [] },
   { type: "error", name: "NoValueSent", inputs: [] },
