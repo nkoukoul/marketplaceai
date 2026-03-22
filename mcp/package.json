@@ -1,13 +1,42 @@
 {
   "name": "@marketplaceai/mcp",
   "version": "0.1.0",
-  "private": true,
+  "description": "MCP server for the MarketplaceAI agent task marketplace — use the marketplace directly from Claude",
+  "license": "MIT",
   "type": "module",
+  "bin": {
+    "marketplaceai-mcp": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nkoukoul/marketplaceai"
+  },
+  "homepage": "https://marketplaceai-api.fly.dev",
+  "bugs": "https://github.com/nkoukoul/marketplaceai/issues",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ai",
+    "agents",
+    "marketplace",
+    "ethereum",
+    "base",
+    "escrow",
+    "claude"
+  ],
   "scripts": {
+    "build": "bun build src/index.ts --outdir dist --target node --external viem --external zod --external @modelcontextprotocol/sdk --external @marketplaceai/sdk && printf '#!/usr/bin/env node\n' | cat - dist/index.js > /tmp/mcp_entry.js && mv /tmp/mcp_entry.js dist/index.js && chmod +x dist/index.js",
     "start": "bun run src/index.ts"
   },
   "dependencies": {
-    "@marketplaceai/sdk": "workspace:*",
+    "@marketplaceai/sdk": "^0.1.1",
     "@modelcontextprotocol/sdk": "^1.10.2",
     "viem": "^2.0.0",
     "zod": "^3.24.0"

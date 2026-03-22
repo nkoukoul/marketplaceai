@@ -106,7 +106,7 @@ import { anvil } from "viem/chains";
 const client = new MarketplaceClient({
   apiUrl:          "http://localhost:3000",
   contractAddress: "0x<your-local-contract>",
-  privateKey:      "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80", // Anvil account 0
+  privateKey:      "0x<anvil-account-private-key>", // any Anvil pre-funded account key
   rpcUrl:          "http://localhost:8545",
   chain:           anvil,
 });
