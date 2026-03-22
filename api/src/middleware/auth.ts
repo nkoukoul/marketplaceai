@@ -7,9 +7,14 @@
 // The middleware recovers the signer's Ethereum address and injects it into
 // the Hono context as `signer`. Routes read it with c.get("signer").
 // The API never sees a private key — the agent signs everything client-side.
+//
+// Side effect: the full secp256k1 public key is upserted into agent_pubkeys
+// so other agents can look it up for ECIES key-wrapping.
 
 import type { Context, Next } from "hono";
-import { recoverTypedDataAddress } from "viem";
+import { recoverTypedDataAddress, hashTypedData, recoverPublicKey } from "viem";
+import { db } from "../db";
+import { agentPubkeys } from "../db/schema";
 
 export const EIP712_DOMAIN = {
   name: "MarketplaceAI",
@@ -43,15 +48,23 @@ export async function requireAuth(c: Context, next: Next) {
   // copy-pasted across routes (e.g. a "claimTask" sig can't be used on /approve).
   const action = deriveAction(c.req.method, c.req.path);
 
+  const typedDataParams = {
+    domain: EIP712_DOMAIN,
+    types: AUTH_TYPES,
+    primaryType: "ApiRequest" as const,
+    message: { action, nonce: BigInt(nonceStr) },
+  };
+
   try {
     const signer = await recoverTypedDataAddress({
-      domain: EIP712_DOMAIN,
-      types: AUTH_TYPES,
-      primaryType: "ApiRequest",
-      message: { action, nonce: BigInt(nonceStr) },
+      ...typedDataParams,
       signature,
     });
     c.set("signer", signer);
+
+    // Fire-and-forget: capture full public key for ECIES key-wrapping.
+    // Never blocks or fails the request.
+    capturePublicKey(typedDataParams, signature, signer).catch(() => {});
   } catch {
     return c.json({ error: "invalid signature" }, 401);
   }
@@ -59,12 +72,30 @@ export async function requireAuth(c: Context, next: Next) {
   await next();
 }
 
+async function capturePublicKey(
+  typedDataParams: Parameters<typeof hashTypedData>[0],
+  signature: `0x${string}`,
+  signer: `0x${string}`,
+) {
+  const hash = hashTypedData(typedDataParams);
+  const pubkeyHex = await recoverPublicKey({ hash, signature });
+  await db
+    .insert(agentPubkeys)
+    .values({ address: signer.toLowerCase(), pubkeyHex, updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: agentPubkeys.address,
+      set: { pubkeyHex, updatedAt: new Date() },
+    });
+}
+
 // Maps HTTP method + path pattern to a canonical action string.
 // The SDK must sign with the same string.
 function deriveAction(method: string, path: string): string {
-  if (method === "POST" && path.endsWith("/approve")) return "approveResult";
-  if (method === "POST" && path.endsWith("/submit"))  return "submitResult";
-  if (method === "POST" && path.endsWith("/claim"))   return "claimTask";
-  if (method === "POST")                              return "createTask";
+  if (method === "POST" && path.endsWith("/approve"))      return "approveResult";
+  if (method === "POST" && path.endsWith("/submit"))       return "submitResult";
+  if (method === "POST" && path.endsWith("/claim"))        return "claimTask";
+  if (method === "POST" && path.endsWith("/grant"))        return "grantTaskAccess";
+  if (method === "POST" && path.endsWith("/release"))      return "releaseClaim";
+  if (method === "POST")                                   return "createTask";
   return `${method}:${path}`;
 }
