@@ -1,14 +1,9 @@
 /** @jsxImportSource hono/jsx */
 
-// Server-rendered landing page + admin dashboard.
-// Mounted at "/" and "/admin" in api/src/index.ts.
-//
-// Admin access: HTTP Basic Auth
-//   username: admin
-//   password: $ADMIN_PASSWORD env var
+// Server-rendered landing page + public dashboard.
+// Mounted at "/" and "/dashboard" in api/src/index.ts.
 
 import { Hono } from "hono";
-import { basicAuth } from "hono/basic-auth";
 import { count, desc, sql } from "drizzle-orm";
 import { formatEther } from "viem";
 import { db } from "../db";
@@ -88,6 +83,7 @@ function Shell({ title, refresh, children }: {
         <nav class="border-b border-gray-800 px-6 py-4 sticky top-0 bg-gray-950/90 backdrop-blur z-10">
           <div class="max-w-6xl mx-auto flex items-center justify-between">
             <a href="/" class="mono font-bold text-lg tracking-tight">MarketplaceAI</a>
+            <a href="/dashboard" class="text-sm text-gray-400 hover:text-gray-100 transition-colors">Dashboard →</a>
           </div>
         </nav>
         {children}
@@ -229,17 +225,7 @@ await client.approveResult(task.id)`;
   );
 });
 
-// ─── Admin dashboard ──────────────────────────────────────────────────────────
-
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
-if (!ADMIN_PASSWORD) {
-  console.warn("ADMIN_PASSWORD not set — admin panel will reject all requests");
-}
-
-router.use(
-  "/admin",
-  basicAuth({ username: "admin", password: ADMIN_PASSWORD ?? crypto.randomUUID() }),
-);
+// ─── Public dashboard ─────────────────────────────────────────────────────────
 
 const STATUS_STYLES: Record<Status, string> = {
   open:      "bg-blue-500/10   text-blue-400   border-blue-500/20",
@@ -268,7 +254,7 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
   );
 }
 
-router.get("/admin", async (c) => {
+router.get("/dashboard", async (c) => {
   const [allTasks, stats, pendingFees, relayerBal] = await Promise.all([
     db.select().from(tasks).orderBy(desc(tasks.createdAt)).limit(100),
     getSiteStats(),
@@ -283,13 +269,13 @@ router.get("/admin", async (c) => {
     .reduce((s, st) => s + stats.byStatus[st].volumeWei, 0n);
 
   return c.html(
-    <Shell title="Admin — MarketplaceAI" refresh={30}>
+    <Shell title="Dashboard — MarketplaceAI" refresh={30}>
       <div class="max-w-6xl mx-auto px-6 py-10">
 
         {/* Header */}
         <div class="flex items-center justify-between mb-8">
           <div>
-            <h1 class="text-2xl font-bold">Admin Dashboard</h1>
+            <h1 class="text-2xl font-bold">Dashboard</h1>
             <p class="text-gray-500 text-sm mt-1">
               Auto-refreshes every 30 s · {new Date().toUTCString()}
             </p>
@@ -344,7 +330,7 @@ router.get("/admin", async (c) => {
                 {allTasks.map((t, i) => (
                   <tr class={`border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors ${i % 2 === 0 ? "" : "bg-gray-900/50"}`}>
                     <td class="px-5 py-3">
-                      <div class="font-medium text-gray-100 truncate max-w-[200px]" title={t.title}>{t.title}</div>
+                      <div class="font-medium text-gray-100 truncate max-w-[200px]">[encrypted]</div>
                       <div class="text-xs text-gray-600 mono">{t.id.slice(0, 8)}…</div>
                     </td>
                     <td class="px-4 py-3"><StatusBadge status={t.status} /></td>
