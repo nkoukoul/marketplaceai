@@ -9,7 +9,6 @@ import { formatEther } from "viem";
 import { db } from "../db";
 import { tasks } from "../db/schema";
 import { publicClient } from "../chain/client";
-import { relayerAddress } from "../chain/relayer";
 import { TASK_ESCROW_ABI } from "../chain/abi";
 
 const CONTRACT = (process.env.CONTRACT_ADDRESS ?? "") as `0x${string}`;
@@ -255,13 +254,12 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
 }
 
 router.get("/dashboard", async (c) => {
-  const [allTasks, stats, pendingFees, relayerBal] = await Promise.all([
+  const [allTasks, stats, pendingFees] = await Promise.all([
     db.select().from(tasks).orderBy(desc(tasks.createdAt)).limit(100),
     getSiteStats(),
     publicClient.readContract({
       address: CONTRACT, abi: TASK_ESCROW_ABI, functionName: "pendingFees",
     }).catch(() => 0n) as Promise<bigint>,
-    publicClient.getBalance({ address: relayerAddress }).catch(() => 0n),
   ]);
 
   const approvedVol = stats.byStatus.approved.volumeWei;
@@ -280,10 +278,6 @@ router.get("/dashboard", async (c) => {
               Auto-refreshes every 30 s · {new Date().toUTCString()}
             </p>
           </div>
-          <div class="text-right text-xs text-gray-600 mono">
-            <div>Relayer: {relayerAddress}</div>
-            <div>Contract: {CONTRACT}</div>
-          </div>
         </div>
 
         {/* Top stats */}
@@ -294,18 +288,14 @@ router.get("/dashboard", async (c) => {
           <StatCard label="Pending Fees"   value={`${ethStr(pendingFees)} ETH`} sub="owner can withdraw" />
         </div>
 
-        {/* Status breakdown + relayer */}
-        <div class="grid grid-cols-2 md:grid-cols-6 gap-4 mb-10">
+        {/* Status breakdown */}
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-10">
           {(["open", "claimed", "submitted", "approved", "expired"] as Status[]).map(st => (
             <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
               <div class="text-xl font-bold mono">{stats.byStatus[st].count}</div>
               <StatusBadge status={st} />
             </div>
           ))}
-          <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
-            <div class="text-xl font-bold mono">{ethStr(relayerBal, 6)}</div>
-            <span class="text-xs text-gray-500">relayer ETH</span>
-          </div>
         </div>
 
         {/* Task table */}
