@@ -100,8 +100,12 @@ export class MarketplaceClient {
 
   // ── Public reads (no auth needed) ──────────────────────────────────────────
 
-  async listTasks(status?: Task["status"]): Promise<Task[]> {
-    const url = `${this.apiUrl}/tasks${status ? `?status=${status}` : ""}`;
+  async listTasks(filters?: { status?: Task["status"]; requester?: string }): Promise<Task[]> {
+    const params = new URLSearchParams();
+    if (filters?.status)    params.set("status", filters.status);
+    if (filters?.requester) params.set("requester", filters.requester);
+    const qs  = params.toString();
+    const url = `${this.apiUrl}/tasks${qs ? `?${qs}` : ""}`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`listTasks failed: ${await res.text()}`);
     return ((await res.json()) as { tasks: Task[] }).tasks;

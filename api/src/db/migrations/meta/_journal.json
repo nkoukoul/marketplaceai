@@ -8,6 +8,13 @@
       "when": 1772912613583,
       "tag": "0000_serious_shinko_yamashiro",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1774204993818,
+      "tag": "0001_add_claimed_at",
+      "breakpoints": true
     }
   ]
 }

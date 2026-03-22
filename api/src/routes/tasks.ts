@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { keccak256, toBytes, parseEther } from "viem";
-import { eq } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { db } from "../db";
 import { tasks } from "../db/schema";
 import { broadcastSignedTx, readTask } from "../chain/escrow";
@@ -11,13 +11,18 @@ type Variables = { signer: `0x${string}` };
 const router = new Hono<{ Variables: Variables }>();
 
 // ─── GET /tasks ───────────────────────────────────────────────────────────────
-// Public — no auth required. Optional ?status= filter.
+// Public — no auth required. Optional ?status= and ?requester= filters.
 
 router.get("/", async (c) => {
-  const statusFilter = c.req.query("status") as string | undefined;
-  const rows = statusFilter
-    ? await db.select().from(tasks).where(eq(tasks.status, statusFilter as any))
-    : await db.select().from(tasks);
+  const statusFilter    = c.req.query("status") as string | undefined;
+  const requesterFilter = c.req.query("requester")?.toLowerCase();
+
+  const where = and(
+    statusFilter    ? eq(tasks.status, statusFilter as any) : undefined,
+    requesterFilter ? eq(sql`lower(${tasks.requester})`, requesterFilter) : undefined,
+  );
+
+  const rows = await db.select().from(tasks).where(where);
   return c.json({ tasks: rows.map(serialize) });
 });
 
@@ -111,7 +116,7 @@ router.post("/:id/claim", requireAuth, async (c) => {
 
   const [updated] = await db
     .update(tasks)
-    .set({ status: "claimed", worker: signer, updatedAt: new Date() })
+    .set({ status: "claimed", worker: signer, claimedAt: new Date(), updatedAt: new Date() })
     .where(eq(tasks.id, task.id))
     .returning();
 
