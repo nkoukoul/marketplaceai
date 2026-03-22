@@ -41,4 +41,18 @@ export const TASK_ESCROW_ABI = [
     outputs: [],
     stateMutability: "nonpayable",
   },
+  {
+    type: "function",
+    name: "releaseClaim",
+    inputs: [{ name: "taskId", type: "bytes32" }],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "releaseStaleClaimTask",
+    inputs: [{ name: "taskId", type: "bytes32" }],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
 ] as const;

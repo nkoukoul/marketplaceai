@@ -14,6 +14,7 @@ contract TaskEscrowTest is Test {
 
     uint16  constant FEE_BPS           = 250;      // 2.5%
     uint256 constant AUTO_APPROVE_DELAY = 3 days;
+    uint256 constant CLAIM_TIMEOUT     = 7 days;
     uint256 constant AMOUNT            = 1 ether;
     uint256 constant DEADLINE          = 7 days;
 
@@ -22,7 +23,7 @@ contract TaskEscrowTest is Test {
 
     function setUp() public {
         vm.prank(owner);
-        escrow = new TaskEscrow(FEE_BPS, AUTO_APPROVE_DELAY);
+        escrow = new TaskEscrow(FEE_BPS, AUTO_APPROVE_DELAY, CLAIM_TIMEOUT);
         vm.deal(requester, 10 ether);
     }
 
@@ -38,6 +39,7 @@ contract TaskEscrowTest is Test {
         vm.prank(worker);
         escrow.claimTask(taskId);
         assertEq(uint(escrow.getTask(taskId).status), uint(TaskEscrow.TaskStatus.Claimed));
+        assertEq(escrow.getTask(taskId).claimedAt, block.timestamp);
 
         vm.prank(worker);
         escrow.submitResult(taskId, resultHash);
@@ -131,6 +133,119 @@ contract TaskEscrowTest is Test {
         escrow.expireTask(taskId);
     }
 
+    // ── Release claim ─────────────────────────────────────────────────────────
+
+    function test_releaseClaim_byRequester() public {
+        uint256 deadline = block.timestamp + DEADLINE;
+        vm.prank(requester);
+        escrow.createTask{value: AMOUNT}(taskId, deadline);
+
+        vm.prank(worker);
+        escrow.claimTask(taskId);
+        assertEq(uint(escrow.getTask(taskId).status), uint(TaskEscrow.TaskStatus.Claimed));
+
+        vm.prank(requester);
+        vm.expectEmit(true, true, false, false);
+        emit TaskEscrow.TaskReleased(taskId, requester);
+        escrow.releaseClaim(taskId);
+
+        TaskEscrow.Task memory t = escrow.getTask(taskId);
+        assertEq(uint(t.status), uint(TaskEscrow.TaskStatus.Open));
+        assertEq(t.worker, address(0));
+        assertEq(t.claimedAt, 0);
+    }
+
+    function test_releaseClaim_workerCanReclaimAfterRelease() public {
+        uint256 deadline = block.timestamp + DEADLINE;
+        vm.prank(requester);
+        escrow.createTask{value: AMOUNT}(taskId, deadline);
+
+        vm.prank(worker);
+        escrow.claimTask(taskId);
+
+        vm.prank(requester);
+        escrow.releaseClaim(taskId);
+
+        // A different worker can now claim
+        address worker2 = makeAddr("worker2");
+        vm.prank(worker2);
+        escrow.claimTask(taskId);
+        assertEq(escrow.getTask(taskId).worker, worker2);
+    }
+
+    function test_revert_releaseClaim_notRequester() public {
+        uint256 deadline = block.timestamp + DEADLINE;
+        vm.prank(requester);
+        escrow.createTask{value: AMOUNT}(taskId, deadline);
+
+        vm.prank(worker);
+        escrow.claimTask(taskId);
+
+        vm.prank(worker);
+        vm.expectRevert(TaskEscrow.NotRequester.selector);
+        escrow.releaseClaim(taskId);
+    }
+
+    function test_revert_releaseClaim_wrongStatus() public {
+        uint256 deadline = block.timestamp + DEADLINE;
+        vm.prank(requester);
+        escrow.createTask{value: AMOUNT}(taskId, deadline);
+
+        // Task is Open, not Claimed
+        vm.prank(requester);
+        vm.expectRevert(abi.encodeWithSelector(
+            TaskEscrow.WrongStatus.selector,
+            TaskEscrow.TaskStatus.Claimed,
+            TaskEscrow.TaskStatus.Open
+        ));
+        escrow.releaseClaim(taskId);
+    }
+
+    // ── Stale claim release ───────────────────────────────────────────────────
+
+    function test_releaseStaleClaimTask_byAnyone() public {
+        uint256 deadline = block.timestamp + DEADLINE;
+        vm.prank(requester);
+        escrow.createTask{value: AMOUNT}(taskId, deadline);
+
+        uint256 claimedAt = block.timestamp;
+        vm.prank(worker);
+        escrow.claimTask(taskId);
+
+        // Still within timeout (one second before expiry)
+        vm.warp(claimedAt + CLAIM_TIMEOUT - 1);
+        vm.prank(anyone);
+        vm.expectRevert(TaskEscrow.ClaimNotExpired.selector);
+        escrow.releaseStaleClaimTask(taskId);
+
+        // Exactly at timeout — allowed
+        vm.warp(claimedAt + CLAIM_TIMEOUT);
+        vm.prank(anyone);
+        vm.expectEmit(true, true, false, false);
+        emit TaskEscrow.TaskReleased(taskId, anyone);
+        escrow.releaseStaleClaimTask(taskId);
+
+        TaskEscrow.Task memory t = escrow.getTask(taskId);
+        assertEq(uint(t.status), uint(TaskEscrow.TaskStatus.Open));
+        assertEq(t.worker, address(0));
+        assertEq(t.claimedAt, 0);
+    }
+
+    function test_revert_releaseStaleClaimTask_wrongStatus() public {
+        uint256 deadline = block.timestamp + DEADLINE;
+        vm.prank(requester);
+        escrow.createTask{value: AMOUNT}(taskId, deadline);
+
+        // Task is Open, not Claimed
+        vm.prank(anyone);
+        vm.expectRevert(abi.encodeWithSelector(
+            TaskEscrow.WrongStatus.selector,
+            TaskEscrow.TaskStatus.Claimed,
+            TaskEscrow.TaskStatus.Open
+        ));
+        escrow.releaseStaleClaimTask(taskId);
+    }
+
     // ── Fee withdrawal ────────────────────────────────────────────────────────
 
     function test_withdrawFees() public {
@@ -157,6 +272,12 @@ contract TaskEscrowTest is Test {
         assertEq(escrow.autoApproveDelay(), 1 days);
     }
 
+    function test_setClaimTimeout() public {
+        vm.prank(owner);
+        escrow.setClaimTimeout(14 days);
+        assertEq(escrow.claimTimeout(), 14 days);
+    }
+
     // ── Revert cases ──────────────────────────────────────────────────────────
 
     function test_revert_onlyRequesterCanApprove() public {
@@ -179,7 +300,7 @@ contract TaskEscrowTest is Test {
 
     function test_revert_feeTooHigh() public {
         vm.expectRevert(TaskEscrow.FeeTooHigh.selector);
-        new TaskEscrow(1001, AUTO_APPROVE_DELAY);
+        new TaskEscrow(1001, AUTO_APPROVE_DELAY, CLAIM_TIMEOUT);
     }
 
     function test_revert_duplicateTask() public {

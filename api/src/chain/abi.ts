@@ -7,6 +7,7 @@ export const TASK_ESCROW_ABI = [
     inputs: [
       { name: "_feeBps", type: "uint16" },
       { name: "_autoApproveDelay", type: "uint256" },
+      { name: "_claimTimeout", type: "uint256" },
     ],
     stateMutability: "nonpayable",
   },
@@ -53,6 +54,20 @@ export const TASK_ESCROW_ABI = [
   },
   {
     type: "function",
+    name: "releaseClaim",
+    inputs: [{ name: "taskId", type: "bytes32" }],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "releaseStaleClaimTask",
+    inputs: [{ name: "taskId", type: "bytes32" }],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
     name: "getTask",
     inputs: [{ name: "taskId", type: "bytes32" }],
     outputs: [
@@ -64,6 +79,7 @@ export const TASK_ESCROW_ABI = [
           { name: "worker", type: "address" },
           { name: "amount", type: "uint256" },
           { name: "deadline", type: "uint256" },
+          { name: "claimedAt", type: "uint256" },
           { name: "status", type: "uint8" },
           { name: "resultHash", type: "bytes32" },
         ],
@@ -102,6 +118,13 @@ export const TASK_ESCROW_ABI = [
   {
     type: "function",
     name: "autoApproveDelay",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "claimTimeout",
     inputs: [],
     outputs: [{ name: "", type: "uint256" }],
     stateMutability: "view",
@@ -149,12 +172,21 @@ export const TASK_ESCROW_ABI = [
       { name: "fee", type: "uint256", indexed: false },
     ],
   },
+  {
+    type: "event",
+    name: "TaskReleased",
+    inputs: [
+      { name: "taskId", type: "bytes32", indexed: true },
+      { name: "releasedBy", type: "address", indexed: true },
+    ],
+  },
   // Errors
   { type: "error", name: "TaskAlreadyExists", inputs: [] },
   { type: "error", name: "TaskNotFound", inputs: [] },
   { type: "error", name: "NotRequester", inputs: [] },
   { type: "error", name: "NotWorker", inputs: [] },
   { type: "error", name: "AutoApproveNotReady", inputs: [] },
+  { type: "error", name: "ClaimNotExpired", inputs: [] },
   { type: "error", name: "DeadlinePassed", inputs: [] },
   { type: "error", name: "DeadlineNotPassed", inputs: [] },
   { type: "error", name: "NoValueSent", inputs: [] },

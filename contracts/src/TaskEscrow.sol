@@ -10,6 +10,11 @@ pragma solidity ^0.8.24;
 ///         If the requester does not approve within `autoApproveDelay` seconds
 ///         after the task deadline, anyone can call autoApprove() to release
 ///         funds to the worker automatically.
+///
+///         If a worker claims a task but does not submit within `claimTimeout`
+///         seconds, anyone can call releaseStaleClaimTask() to return it to Open.
+///         The requester may also voluntarily release a claimed task via
+///         releaseClaim() before any result is submitted.
 contract TaskEscrow {
     // ─────────────────────────────────────────────────────────────────────────
     // Types
@@ -28,6 +33,7 @@ contract TaskEscrow {
         address worker;
         uint256 amount;      // ETH locked (wei)
         uint256 deadline;    // unix timestamp — workers must submit before this
+        uint256 claimedAt;   // timestamp when task was claimed (0 if not claimed)
         TaskStatus status;
         bytes32 resultHash;  // keccak256 of result, set by worker on submit
     }
@@ -44,6 +50,9 @@ contract TaskEscrow {
     /// @dev Seconds after `task.deadline` before anyone can call autoApprove().
     uint256 public autoApproveDelay;
 
+    /// @dev Seconds after `task.claimedAt` before anyone can call releaseStaleClaimTask().
+    uint256 public claimTimeout;
+
     /// @dev Accumulated fees not yet withdrawn.
     uint256 public pendingFees;
 
@@ -58,9 +67,11 @@ contract TaskEscrow {
     event ResultSubmitted(bytes32 indexed taskId, bytes32 resultHash);
     event ResultApproved(bytes32 indexed taskId, uint256 workerPayout, uint256 fee);
     event TaskExpired(bytes32 indexed taskId, uint256 refund);
+    event TaskReleased(bytes32 indexed taskId, address indexed releasedBy);
     event FeeWithdrawn(address indexed to, uint256 amount);
     event FeeBpsUpdated(uint16 newFeeBps);
     event AutoApproveDelayUpdated(uint256 newDelay);
+    event ClaimTimeoutUpdated(uint256 newTimeout);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Errors
@@ -75,6 +86,7 @@ contract TaskEscrow {
     error DeadlinePassed();
     error DeadlineNotPassed();
     error AutoApproveNotReady();
+    error ClaimNotExpired();
     error NoValueSent();
     error FeeTooHigh();
     error TransferFailed();
@@ -86,11 +98,14 @@ contract TaskEscrow {
     /// @param _feeBps           Protocol fee in basis points (e.g. 250 = 2.5%).
     /// @param _autoApproveDelay Seconds after deadline before auto-approval is
     ///                          allowed. E.g. 3 days = 259200.
-    constructor(uint16 _feeBps, uint256 _autoApproveDelay) {
+    /// @param _claimTimeout     Seconds after claimedAt before a stale claim can
+    ///                          be released. E.g. 7 days = 604800.
+    constructor(uint16 _feeBps, uint256 _autoApproveDelay, uint256 _claimTimeout) {
         if (_feeBps > 1000) revert FeeTooHigh();
         owner = msg.sender;
         feeBps = _feeBps;
         autoApproveDelay = _autoApproveDelay;
+        claimTimeout = _claimTimeout;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -112,6 +127,7 @@ contract TaskEscrow {
             worker: address(0),
             amount: msg.value,
             deadline: deadline,
+            claimedAt: 0,
             status: TaskStatus.Open,
             resultHash: bytes32(0)
         });
@@ -151,6 +167,21 @@ contract TaskEscrow {
         emit TaskExpired(taskId, refund);
     }
 
+    /// @notice Requester voluntarily releases a claimed worker, returning the
+    ///         task to Open. Not allowed once a result has been submitted —
+    ///         the worker is protected from that point forward.
+    function releaseClaim(bytes32 taskId) external {
+        Task storage task = _getTask(taskId);
+        if (msg.sender != task.requester) revert NotRequester();
+        if (task.status != TaskStatus.Claimed) revert WrongStatus(TaskStatus.Claimed, task.status);
+
+        task.status = TaskStatus.Open;
+        task.worker = address(0);
+        task.claimedAt = 0;
+
+        emit TaskReleased(taskId, msg.sender);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Worker actions
     // ─────────────────────────────────────────────────────────────────────────
@@ -163,6 +194,7 @@ contract TaskEscrow {
 
         task.status = TaskStatus.Claimed;
         task.worker = msg.sender;
+        task.claimedAt = block.timestamp;
 
         emit TaskClaimed(taskId, msg.sender);
     }
@@ -183,7 +215,7 @@ contract TaskEscrow {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Permissionless: optimistic auto-approval
+    // Permissionless: auto-approval and stale-claim release
     // ─────────────────────────────────────────────────────────────────────────
 
     /// @notice Trigger automatic approval for a submitted task once the
@@ -196,6 +228,23 @@ contract TaskEscrow {
         if (block.timestamp <= task.deadline + autoApproveDelay) revert AutoApproveNotReady();
 
         _settle(taskId, task);
+    }
+
+    /// @notice Anyone can reopen a Claimed task if the worker hasn't submitted
+    ///         within claimTimeout seconds of claiming. This prevents a
+    ///         non-cooperative requester from trapping a worker indefinitely
+    ///         (the requester can use releaseClaim) and also prevents a worker
+    ///         from locking a task without delivering.
+    function releaseStaleClaimTask(bytes32 taskId) external {
+        Task storage task = _getTask(taskId);
+        if (task.status != TaskStatus.Claimed) revert WrongStatus(TaskStatus.Claimed, task.status);
+        if (block.timestamp < task.claimedAt + claimTimeout) revert ClaimNotExpired();
+
+        task.status = TaskStatus.Open;
+        task.worker = address(0);
+        task.claimedAt = 0;
+
+        emit TaskReleased(taskId, msg.sender);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -224,6 +273,13 @@ contract TaskEscrow {
         if (msg.sender != owner) revert NotOwner();
         autoApproveDelay = newDelay;
         emit AutoApproveDelayUpdated(newDelay);
+    }
+
+    /// @notice Update the claim timeout.
+    function setClaimTimeout(uint256 newTimeout) external {
+        if (msg.sender != owner) revert NotOwner();
+        claimTimeout = newTimeout;
+        emit ClaimTimeoutUpdated(newTimeout);
     }
 
     /// @notice Transfer contract ownership.
