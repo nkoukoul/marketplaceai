@@ -1,6 +1,6 @@
 {
   "name": "@marketplaceai/sdk",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "TypeScript client SDK for the MarketplaceAI agent task marketplace on Base",
   "license": "MIT",
   "type": "module",
@@ -36,9 +36,12 @@
     "viem"
   ],
   "scripts": {
-    "build": "bun build src/index.ts --outdir dist --target node --external viem && tsc -p tsconfig.json"
+    "build": "bun build src/index.ts --outdir dist --target node --external viem --external @noble/curves --external @noble/ciphers --external @noble/hashes && tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@noble/ciphers": "^2.1.1",
+    "@noble/curves": "^2.0.1",
+    "@noble/hashes": "^2.0.1",
     "viem": "^2.0.0"
   },
   "devDependencies": {
